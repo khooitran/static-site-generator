@@ -9,7 +9,7 @@ class ParentNode(HTMLNode):
         if not self.tag:
             raise ValueError("Parent node does not have a tag")
 
-        if self.children is None:
+        if not self.children:
             raise ValueError("Parent node does not have children")
 
         str = [f"<{self.tag}{self.props_to_html()}>"]
