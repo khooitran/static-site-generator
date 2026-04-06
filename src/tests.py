@@ -4,6 +4,7 @@ from htmlnode import HTMLNode
 from leafnode import LeafNode
 from parentnode import ParentNode
 from texttohtml import text_node_to_html_node
+from split_delimiters import split_nodes_delimiter
 
 
 class TestTextNode(unittest.TestCase):
@@ -121,6 +122,39 @@ class TestTextToHTML(unittest.TestCase):
         node.text_type = "not_a_valid_type"
         with self.assertRaises(Exception):
             text_node_to_html_node(node)
+
+
+class TestSplitNodeDelimiter(unittest.TestCase):
+    def test_code(self):
+        node = TextNode("This is text with a `code block` word", TextType.TEXT)
+        new_nodes = split_nodes_delimiter([node], "`", TextType.CODE)
+        self.assertEqual(
+            new_nodes,
+            [
+                TextNode("This is text with a ", TextType.TEXT),
+                TextNode("code block", TextType.CODE),
+                TextNode(" word", TextType.TEXT),
+            ],
+        )
+
+    def test_beginning(self):
+        node = TextNode("**This is bold** while this is not", TextType.TEXT)
+        node2 = TextNode("_The whole thing is italic_", TextType.TEXT)
+        new_nodes = split_nodes_delimiter([node, node2], "**", TextType.BOLD)
+        new_nodes = split_nodes_delimiter(new_nodes, "_", TextType.ITALIC)
+        self.assertEqual(
+            new_nodes,
+            [
+                TextNode("This is bold", TextType.BOLD),
+                TextNode(" while this is not", TextType.TEXT),
+                TextNode("The whole thing is italic", TextType.ITALIC),
+            ],
+        )
+
+    def test_error(self):
+        node = TextNode("This **should not work", TextType.TEXT)
+        with self.assertRaises(Exception):
+            split_nodes_delimiter(node)
 
 
 if __name__ == "__main__":
