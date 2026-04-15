@@ -3,8 +3,16 @@ from textnode import TextType, TextNode
 from htmlnode import HTMLNode
 from leafnode import LeafNode
 from parentnode import ParentNode
-from texttohtml import text_node_to_html_node
-from split_delimiters import split_nodes_delimiter
+from inline_functions import (
+    text_node_to_html_node,
+    split_nodes_delimiter,
+    extract_markdown_images,
+    extract_markdown_links,
+    split_nodes_image,
+    split_nodes_link,
+    text_to_textnodes,
+)
+from block_functions import markdown_to_blocks, block_to_block_type, BlockType
 
 
 class TestTextNode(unittest.TestCase):
@@ -155,6 +163,172 @@ class TestSplitNodeDelimiter(unittest.TestCase):
         node = TextNode("This **should not work", TextType.TEXT)
         with self.assertRaises(Exception):
             split_nodes_delimiter(node)
+
+
+class TestExtractMarkdown(unittest.TestCase):
+    def test_extract_markdown_images(self):
+        matches = extract_markdown_images(
+            "This is text with an ![image](https://i.imgur.com/zjjcJKZ.png)"
+        )
+        self.assertListEqual([("image", "https://i.imgur.com/zjjcJKZ.png")], matches)
+
+    def test_error(self):
+        matches = extract_markdown_images(
+            "This is text with an ![image](this should not work"
+        )
+        self.assertListEqual([], matches)
+
+    def test_extract_markdown_links(self):
+        matches = extract_markdown_links(
+            "This is a link to [my portfolio](https://www.khooitran.com)."
+        )
+        self.assertEqual([("my portfolio", "https://www.khooitran.com")], matches)
+
+
+class TextSplitImagesAndLinks(unittest.TestCase):
+    def test_split_images(self):
+        node = TextNode(
+            "This is text with an ![image](https://i.imgur.com/zjjcJKZ.png) and another ![second image](https://i.imgur.com/3elNhQu.png)",
+            TextType.TEXT,
+        )
+
+        node2 = TextNode(
+            "This is an ![image](https://i.imgur.com/khooi.png) and that's it!",
+            TextType.TEXT,
+        )
+
+        node3 = TextNode(
+            "![Image right away!](https://i.imgur.com/rightaway.jpeg)", TextType.TEXT
+        )
+
+        node4 = TextNode("[This](shouldn't work", TextType.TEXT)
+
+        new_nodes = split_nodes_image([node, node2, node3, node4])
+
+        self.assertListEqual(
+            [
+                TextNode("This is text with an ", TextType.TEXT),
+                TextNode("image", TextType.IMAGE, "https://i.imgur.com/zjjcJKZ.png"),
+                TextNode(" and another ", TextType.TEXT),
+                TextNode(
+                    "second image", TextType.IMAGE, "https://i.imgur.com/3elNhQu.png"
+                ),
+                TextNode("This is an ", TextType.TEXT),
+                TextNode("image", TextType.IMAGE, "https://i.imgur.com/khooi.png"),
+                TextNode(" and that's it!", TextType.TEXT),
+                TextNode(
+                    "Image right away!",
+                    TextType.IMAGE,
+                    "https://i.imgur.com/rightaway.jpeg",
+                ),
+                TextNode("[This](shouldn't work", TextType.TEXT),
+            ],
+            new_nodes,
+        )
+
+    def test_split_links(self):
+        node = TextNode("[This is a link](https://www.khooitran.com)", TextType.TEXT)
+
+        new_nodes = split_nodes_link([node])
+
+        self.assertListEqual(
+            [TextNode("This is a link", TextType.LINK, "https://www.khooitran.com")],
+            new_nodes,
+        )
+
+
+class TextToTextNodes(unittest.TestCase):
+    def test(self):
+        text = "This is **text** with an _italic_ word and a `code block` and an ![obi wan image](https://i.imgur.com/fJRm4Vk.jpeg) and a [link](https://boot.dev)"
+
+        self.assertListEqual(
+            [
+                TextNode("This is ", TextType.TEXT),
+                TextNode("text", TextType.BOLD),
+                TextNode(" with an ", TextType.TEXT),
+                TextNode("italic", TextType.ITALIC),
+                TextNode(" word and a ", TextType.TEXT),
+                TextNode("code block", TextType.CODE),
+                TextNode(" and an ", TextType.TEXT),
+                TextNode(
+                    "obi wan image", TextType.IMAGE, "https://i.imgur.com/fJRm4Vk.jpeg"
+                ),
+                TextNode(" and a ", TextType.TEXT),
+                TextNode("link", TextType.LINK, "https://boot.dev"),
+            ],
+            text_to_textnodes(text),
+        )
+
+
+class MarkdownToBlocks(unittest.TestCase):
+    def test_markdown_to_blocks(self):
+        md = """
+This is **bolded** paragraph
+
+This is another paragraph with _italic_ text and `code` here
+This is the same paragraph on a new line
+
+- This is a list
+- with items
+
+
+     
+"""
+        blocks = markdown_to_blocks(md)
+        self.assertEqual(
+            blocks,
+            [
+                "This is **bolded** paragraph",
+                "This is another paragraph with _italic_ text and `code` here\nThis is the same paragraph on a new line",
+                "- This is a list\n- with items",
+            ],
+        )
+
+        self.assertEqual(block_to_block_type(blocks[0]), BlockType.PARAGRAPH)
+        self.assertEqual(block_to_block_type(blocks[1]), BlockType.PARAGRAPH)
+        self.assertEqual(block_to_block_type(blocks[2]), BlockType.UNORDERED_LIST)
+
+
+class BlockToBlockType(unittest.TestCase):
+    def test_block_to_block_type(self):
+        text = """
+```
+// This is a code block
+// With some comments in it
+```
+
+- Milk
+- Cheese
+- Spaghetti
+- Bacon
+
+This should just be a normal paragraph
+With a line break in the middle. 
+
+> As once says,
+> This is a quote
+> Something something
+
+1. Do some programming
+2. Learn Japanese
+3. Teach Clusters
+4. Do some housework
+
+##### How to make spaghetti carbonara
+"""
+        blocks = markdown_to_blocks(text)
+
+        self.assertListEqual(
+            list(map(lambda block: block_to_block_type(block), blocks)),
+            [
+                BlockType.CODE,
+                BlockType.UNORDERED_LIST,
+                BlockType.PARAGRAPH,
+                BlockType.QUOTE,
+                BlockType.ORDERED_LIST,
+                BlockType.HEADING,
+            ],
+        )
 
 
 if __name__ == "__main__":
